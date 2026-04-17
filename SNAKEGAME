@@ -1,0 +1,289 @@
+import javafx.animation.KeyFrame;
+import javafx.animation.Timeline;
+import javafx.application.Application;
+import javafx.scene.Scene;
+import javafx.scene.canvas.Canvas;
+import javafx.scene.canvas.GraphicsContext;
+import javafx.scene.input.KeyCode;
+import javafx.scene.layout.StackPane;
+import javafx.scene.paint.*;
+import javafx.scene.text.Font;
+import javafx.scene.text.FontWeight;
+import javafx.stage.Stage;
+import javafx.util.Duration;
+import java.util.Random;
+public class Snake extends Application
+ {
+
+    static final int screen_width = 500;
+    static final int screen_height = 500;
+    static final int unit_size = 25;
+    static final int game_units = (screen_width * screen_height) / unit_size;
+    static final int DELAY = 75;
+
+    final int x[] = new int[game_units];
+    final int y[] = new int[game_units];
+
+    int bodyparts = 3;
+    int apple_eaten;
+    int applex, appley;
+
+    char dir = 'R';
+    boolean run = false;
+    boolean paused = false;
+    boolean started = false;
+
+    double speedMultiplier = 1.0;
+    String difficultyText = "MEDIUM";
+
+    Timeline timeline;
+    Random random;
+
+    @Override
+    public void start(Stage stage) 
+    {
+
+        random = new Random();
+
+        Canvas canvas = new Canvas(screen_width, screen_height);
+        GraphicsContext g = canvas.getGraphicsContext2D();
+
+        newApple();
+
+        timeline = new Timeline(new KeyFrame(Duration.millis(DELAY), e -> {
+            if (run && !paused) {
+                move();
+                apple();
+                collision();
+            }
+            draw(g);
+        }));
+
+        timeline.setCycleCount(Timeline.INDEFINITE);
+        timeline.play();
+
+        Scene scene = new Scene(new StackPane(canvas));
+
+        scene.setOnKeyPressed(e -> {
+            KeyCode code = e.getCode(); 
+            if (!started) {
+                if (code == KeyCode.DIGIT1) {
+                    speedMultiplier = 0.7;
+                    difficultyText = "EASY";
+                }
+                if (code == KeyCode.DIGIT2) {
+                    speedMultiplier = 1.0;
+                    difficultyText = "MEDIUM";
+                }
+                if (code == KeyCode.DIGIT3) {
+                    speedMultiplier = 1.5;
+                    difficultyText = "HARD";
+                }
+            }
+
+            // Start
+            if (!started && code == KeyCode.ENTER)
+            {
+                started = true;
+                run = true;
+                timeline.setRate(speedMultiplier);
+                return;
+            }
+
+            // Restart
+            if (!run && code == KeyCode.ENTER) {
+                restartGame();
+                return;
+            }
+
+            // Pause
+            if (code == KeyCode.P) {
+                paused = !paused;
+                return;
+            }
+
+            if (!run || paused) return;
+
+            switch (code) {
+                case LEFT: if (dir != 'R') dir = 'L'; break;
+                case RIGHT: if (dir != 'L') dir = 'R'; break;
+                case UP: if (dir != 'D') dir = 'U'; break;
+                case DOWN: if (dir != 'U') dir = 'D'; break;
+            }
+        });
+
+        stage.setTitle("Snake Game - JavaFX");
+        stage.setScene(scene);
+        stage.setResizable(false);
+        stage.show();
+    }
+    public void draw(GraphicsContext g) 
+    {
+    
+        // Background
+        g.setFill(Color.web("#0f172a"));
+        g.fillRect(0, 0, screen_width, screen_height);
+    
+        // START SCREEN
+        if (!started) {
+    
+            g.setFill(Color.web("#1e293b"));
+            g.fillRoundRect(50, 80, 400, 320, 20, 20);
+    
+            g.setFill(Color.web("#38bdf8"));
+            g.setFont(Font.font("Arial", FontWeight.BOLD, 40));
+            g.fillText("SNAKE GAME", 100, 140);
+    
+            g.setFill(Color.web("#e2e8f0"));
+            g.setFont(Font.font(20));
+            g.fillText("Press ENTER to Start", 140, 220);
+    
+            g.setFill(Color.web("#38bdf8"));
+            g.fillText("Select Difficulty:", 160, 270);
+    
+            g.setFill(Color.web("#e2e8f0"));
+            g.fillText("1-Easy   2-Medium   3-Hard", 120, 300);
+    
+            g.setFill(Color.web("#22c55e"));
+            g.setFont(Font.font(22));
+            g.fillText("Selected: " + difficultyText, 150, 340);
+    
+            return;
+        }
+    
+        // PAUSE
+        if (paused) {
+            g.setFill(Color.web("#1e293b"));
+            g.fillRect(0,0,screen_width,screen_height);
+    
+            g.setFill(Color.web("#facc15"));
+            g.setFont(Font.font("Arial", FontWeight.BOLD, 50));
+            g.fillText("PAUSED", 150, 250);
+    
+            g.setFill(Color.web("#e2e8f0"));
+            g.setFont(Font.font(20));
+            g.fillText("Press P to Resume", 150, 300);
+            return;
+        }
+
+        if (run) {
+    
+            // Grid
+            g.setStroke(Color.web("#334155"));
+            for (int i = 0; i < screen_height / unit_size; i++) {
+                g.strokeLine(i * unit_size, 0, i * unit_size, screen_height);
+                g.strokeLine(0, i * unit_size, screen_width, i * unit_size);
+            }
+    
+            // Apple
+            g.setFill(Color.web("#ef4444"));
+            g.fillOval(applex, appley, unit_size, unit_size);
+    
+            // Snake
+            for (int i = 0; i < bodyparts; i++) {
+                if (i == 0) g.setFill(Color.web("#22c55e"));
+                else g.setFill(Color.web("#16a34a"));
+                g.fillRect(x[i], y[i], unit_size, unit_size);
+            }
+    
+            // Score
+            g.setFill(Color.web("#e2e8f0"));
+            g.setFont(Font.font("Arial", FontWeight.BOLD, 24));
+            g.fillText("Score: " + apple_eaten, 180, 30);
+    
+        } else {
+            gameOver(g);
+        }
+    }   
+    public void gameOver(GraphicsContext g) 
+    {
+
+        g.setFill(Color.web("#1e293b"));
+        g.fillRoundRect(50, 120, 400, 250, 20, 20);
+    
+        g.setFill(Color.web("#ef4444"));
+        g.setFont(Font.font("Arial", FontWeight.BOLD, 45));
+        g.fillText("GAME OVER", 90, 180);
+    
+        g.setFill(Color.web("#e2e8f0"));
+        g.setFont(Font.font(25));
+        g.fillText("Score: " + apple_eaten, 180, 230);
+    
+        g.setFill(Color.web("#38bdf8"));
+        g.setFont(Font.font(18));
+        g.fillText("Press ENTER to Restart", 140, 280);
+    }
+
+    public void newApple()
+    {
+              
+        applex = random.nextInt(screen_width / unit_size) * unit_size;
+        appley = random.nextInt(screen_height / unit_size) * unit_size;
+    }
+
+    public void move()
+    {
+        for (int i = bodyparts; i > 0; i--) 
+        {
+            x[i] = x[i - 1];
+            y[i] = y[i - 1];
+        }
+
+        switch (dir) 
+        {
+            case 'U': y[0] -= unit_size; break;
+            case 'D': y[0] += unit_size; break;
+            case 'L': x[0] -= unit_size; break;
+            case 'R': x[0] += unit_size; break;
+        }
+    }
+
+    public void apple() 
+    {
+        if (x[0] == applex && y[0] == appley) 
+        {
+            bodyparts++;
+            apple_eaten++;
+            newApple();
+        }
+    }
+
+    public void collision() {
+
+        for (int i = bodyparts; i > 0; i--) {
+            if (x[0] == x[i] && y[0] == y[i]) {
+                run = false;
+            }
+        }
+
+        if (x[0] < 0 || x[0] >= screen_width ||
+            y[0] < 0 || y[0] >= screen_height) {
+            run = false;
+        }
+
+        if (!run) timeline.stop();
+    }
+
+    public void restartGame() 
+    {
+        bodyparts = 3;
+        apple_eaten = 0;
+        dir = 'R';
+
+        for (int i = 0; i < x.length; i++)
+        {
+            x[i] = 0;
+            y[i] = 0;
+        }
+
+        newApple();
+        run = true;
+        paused = false;
+        timeline.play();
+    }
+
+    public static void main(String[] args) 
+    {
+        launch(args);
+    }
+}
